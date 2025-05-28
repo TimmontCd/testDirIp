@@ -1,7 +1,7 @@
 app = "testDirIp"
 
 [build]
- dockerfile = "Dockerfile"
+ dockerfile = "dockerfile"
 
 
 [env]
