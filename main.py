@@ -95,10 +95,18 @@ clientes = [
 async def get_customers(searchType: str = "", informationSearch: str = ""):
     resultados = []
 
+    palabras = informationSearch.strip().lower().split()
+
     for cliente in clientes:
         nombre_completo = f"{cliente['name']} {cliente['lastNameFather']} {cliente['lastNameMother']}".lower()
-        if informationSearch.lower() in nombre_completo or cliente['name'].lower() in informationSearch.lower():
-            resultados.append(cliente)
+        nombre = cliente['name'].lower()
+
+        if len(palabras) == 1:
+            if palabras[0] == nombre:
+                resultados.append(cliente)
+        else:
+            if informationSearch.lower() in nombre_completo:
+                resultados.append(cliente)
 
     dummy_response = {
         "customersList": resultados,
