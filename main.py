@@ -2,7 +2,7 @@ import os
 import httpx
 import logging
 from dotenv import load_dotenv
-from fastmcp import FastMCP, MCPTool, MCPResource
+from fastmcp import FastMCP
 
 # Configuración de logging y variables de entorno
 logging.basicConfig(level=logging.INFO)
@@ -34,51 +34,50 @@ app = FastMCP(
 )
 
 # --- RESOURCE: search ---
-@app.resource("search")
-class SearchResource(MCPResource):
-    """Consulta de información en backend por texto"""
+@app.resource("search", description="Consulta información en backend por texto libre")
+async def search_resource(query: str):
+    """Recurso MCP que ejecuta una búsqueda simple"""
+    params = {"searchType": "F", "informationSearch": query}
+    logging.info(f"🔍 Realizando búsqueda en recurso MCP para: {query}")
 
-    async def on_query(self, query: str):
-        params = {"searchType": "F", "informationSearch": query}
-        logging.info(f"🔍 Realizando búsqueda para: {query}")
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
-            return resp.json()
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
+        return resp.json()
 
 
 # --- TOOL: search-tool ---
-@app.tool("search-tool")
-class SearchTool(MCPTool):
-    """Ejecuta búsquedas en el backend"""
-
-    input_schema = {
+@app.tool(
+    "search-tool",
+    description="Ejecuta búsquedas en el backend",
+    input_schema={
         "type": "object",
         "properties": {
             "search": {"type": "string"}
         },
         "required": ["search"]
     }
+)
+async def search_tool(search: str):
+    """Herramienta MCP que ejecuta búsquedas"""
+    params = {"searchType": "F", "informationSearch": search}
+    logging.info(f"🧰 Ejecutando herramienta MCP con parámetro: {search}")
 
-    async def handler(self, search: str):
-        params = {"searchType": "F", "informationSearch": search}
-        logging.info(f"🧰 Ejecutando herramienta MCP con parámetro: {search}")
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
+        data = resp.json()
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
-            data = resp.json()
-
-        return {
-            "results": data,
-            "count": len(data) if isinstance(data, list) else 1
-        }
+    return {
+        "results": data,
+        "count": len(data) if isinstance(data, list) else 1
+    }
 
 
-# --- Health check (opcional) ---
+# --- Health check ---
 @app.health_check
 async def health():
     return {"status": "ok"}
 
 
-# --- Inicia el servidor MCP ---
+# --- Ejecutar servidor MCP ---
 if __name__ == "__main__":
     app.run(port=3000)
