@@ -1,0 +1,27 @@
+{
+  "name": "search-mcp-server",
+  "version": "1.0.0",
+  "description": "Servidor MCP que expone recursos y herramientas de búsqueda",
+  "resources": [
+    {
+      "id": "search",
+      "name": "Search Resource",
+      "description": "Consulta texto libre contra el backend",
+      "type": "query"
+    }
+  ],
+  "tools": [
+    {
+      "id": "search-tool",
+      "name": "Search Tool",
+      "description": "Ejecuta búsquedas en el backend",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "search": { "type": "string" }
+        },
+        "required": ["search"]
+      }
+    }
+  ]
+}
