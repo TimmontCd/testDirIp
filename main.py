@@ -1,120 +1,89 @@
-import os
-import httpx
-import logging
-from dotenv import load_dotenv
+from fastapi import FastAPI, Request
 from fastmcp import FastMCP
+from pydantic import BaseModel
+from dotenv import load_dotenv
+from fastapi.responses import JSONResponse
+import requests
+import logging
+import os
 
-# ======================================================
-# CONFIGURACIÓN Y VARIABLES DE ENTORNO
-# ======================================================
+# Configurar logs
 logging.basicConfig(level=logging.INFO)
+
+# Cargar variables de entorno
 load_dotenv()
 
+# Crear app y servidor MCP
+app = FastAPI()
+mcp = FastMCP(app, name="search-mcp-server", version="1.0.0")
+
+# Variables del backend
 BACKEND_URL = os.getenv("BACKEND_URL")
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-CHANNEL = os.getenv("CHANNEL")
-USER_EXECUTE = os.getenv("USER_EXECUTE")
-
-if not BACKEND_URL:
-    raise RuntimeError("❌ BACKEND_URL no está configurado en .env")
-
-BASE_HEADERS = {
-    "X-IBM-Client-Id": CLIENT_ID or "",
-    "X-IBM-Client-Secret": CLIENT_SECRET or "",
-    "X-Request-Channel": CHANNEL or "",
-    "X-Request-UserExecute": USER_EXECUTE or "",
+HEADERS = {
+    "X-IBM-Client-Id": os.getenv("CLIENT_ID"),
+    "X-IBM-Client-Secret": os.getenv("CLIENT_SECRET"),
+    "X-Request-Channel": os.getenv("CHANNEL"),
+    "X-Request-UserExecute": os.getenv("USER_EXECUTE"),
     "cache-control": "no-cache",
     "ngrok-skip-browser-warning": "true"
 }
 
-# ======================================================
-# INICIALIZA EL SERVIDOR MCP
-# ======================================================
-app = FastMCP(
-    name="search-mcp-server",
-    version="1.0.0",
-    description="Servidor MCP que realiza búsquedas de clientes en el backend"
-)
+# Modelo del request
+class SearchPayload(BaseModel):
+    search: str
 
-# ======================================================
-# TOOL: search-tool  → Mantiene la lógica de /api/messages
-# ======================================================
-@app.tool(
-    "search-tool",
-    description="Ejecuta búsquedas de clientes en el backend",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "search": {"type": "string", "description": "Texto de búsqueda de cliente"}
-        },
-        "required": ["search"]
+
+# 🔹 Endpoint REST tradicional (mantienes compatibilidad con tus integraciones actuales)
+@app.post("/api/messages")
+async def handle_message(payload: SearchPayload, request: Request):
+    headers = dict(request.headers)
+    logging.info(f"📨 Payload recibido: {payload}")
+    logging.info(f"🧾 Headers recibidos: {headers}")
+
+    params = {
+        "searchType": "F",
+        "informationSearch": payload.search
     }
-)
-async def search_tool(search: str):
-    """
-    Ejecuta la misma lógica que el endpoint /api/messages.
-    """
-    params = {"searchType": "F", "informationSearch": search}
-    logging.info("📨 Ejecutando herramienta de búsqueda")
-    logging.info(f"🔗 URL: {BACKEND_URL}")
-    logging.info(f"🧾 Headers: {BASE_HEADERS}")
-    logging.info(f"📦 Parámetros: {params}")
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        logging.info(f"🔁 Llamando backend {BACKEND_URL}")
+        response = requests.get(BACKEND_URL, headers=HEADERS, params=params)
+        return JSONResponse(content=response.json())
+    except Exception as e:
+        logging.error(f"❌ Error en backend: {e}")
+        return {"error": str(e)}
 
-        logging.info("✅ Respuesta recibida correctamente")
-        return {"results": data, "ngrok-skip-browser-warning": "true"}
 
-    except httpx.RequestError as e:
-        logging.error(f"❌ Error de conexión al backend: {e}")
-        return {"error": "No se pudo conectar con el backend", "details": str(e)}
-
-    except httpx.HTTPStatusError as e:
-        logging.error(f"❌ Error HTTP {e.response.status_code}: {e.response.text}")
-        return {
-            "error": f"HTTP {e.response.status_code}",
-            "details": e.response.text
-        }
-
-# ======================================================
-# RESOURCE: search → opcional (consulta directa)
-# ======================================================
-@app.resource(
-    "search",
-    description="Recurso que permite consultar texto libre contra el backend",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "Texto libre de búsqueda"}
-        },
-        "required": ["query"]
+# 🔹 Recurso MCP
+@mcp.resource("search")
+async def search_resource():
+    return {
+        "id": "search",
+        "name": "Search Resource",
+        "description": "Consulta texto libre contra el backend",
+        "type": "query"
     }
-)
-async def search_resource(query: str):
-    """
-    Igual que la herramienta, pero expuesto como recurso MCP.
-    """
-    logging.info(f"🔍 Recurso ejecutando búsqueda: {query}")
-    params = {"searchType": "F", "informationSearch": query}
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params)
-        return resp.json()
 
-# ======================================================
-# HEALTH CHECK (opcional)
-# ======================================================
-@app.health_check
-async def health():
-    return {"status": "ok"}
+# 🔹 Herramienta MCP — sin input_schema (FastMCP 0.4.1 lo detecta automáticamente)
+@mcp.tool("search-tool")
+async def search_tool(search: str):
+    """Ejecuta búsquedas en el backend"""
+    params = {
+        "searchType": "F",
+        "informationSearch": search
+    }
+    try:
+        logging.info(f"🔍 Ejecutando MCP search con término: {search}")
+        response = requests.get(BACKEND_URL, headers=HEADERS, params=params)
+        return response.json()
+    except Exception as e:
+        logging.error(f"❌ Error MCP backend: {e}")
+        return {"error": str(e)}
 
-# ======================================================
-# PUNTO DE ENTRADA
-# ======================================================
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
