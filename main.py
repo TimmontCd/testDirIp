@@ -25,7 +25,7 @@ class InvokePayload(BaseModel):
 @app.get("/mcp.json")
 async def manifest():
     # Si existe manifest.json en la raíz, lo sirve; si no, devuelve inline (fallback)
-    manifest_path = "manifest.json"
+    manifest_path = "mcp.json"
     if os.path.exists(manifest_path):
         return FileResponse(manifest_path, media_type="application/json")
 
@@ -48,3 +48,4 @@ async def invoke_search(payload: InvokePayload):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
+
