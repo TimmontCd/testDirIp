@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "server": {
     "transport": "http",
-    "url": "https://testdirip.onrender.com/"
+    "url": "https://testdirip.onrender.com"
   },
   "tools": [
     {
