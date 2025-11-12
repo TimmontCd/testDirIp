@@ -1,0 +1,34 @@
+{
+  "name": "search-tool-server",
+  "description": "Servidor MCP para búsqueda de clientes",
+  "version": "1.0.0",
+  "server": {
+    "transport": "http",
+    "url": "https://testdirip.onrender.com/"
+  },
+  "tools": [
+    {
+      "name": "search_tool",
+      "description": "Busca clientes en el backend por texto libre",
+      "parameters": {
+        "search": {
+          "type": "string",
+          "description": "Texto a buscar (nombre, ID, etc.)"
+        }
+      },
+      "returns": {
+        "type": "object",
+        "description": "Resultados de búsqueda en formato JSON"
+      },
+      "intent": {
+        "name": "buscar_clientes",
+        "description": "Buscar clientes por nombre, ID o información relacionada",
+        "examples": [
+          "Busca el cliente llamado Carolina",
+          "Quiero encontrar al cliente con ID 12345",
+          "Muéstrame los datos del cliente Juan Pérez"
+        ]
+      }
+    }
+  ]
+}
