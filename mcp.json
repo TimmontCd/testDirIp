@@ -1,27 +1,23 @@
 {
   "name": "search-mcp-server",
   "version": "1.0.0",
-  "description": "Servidor MCP que expone recursos y herramientas de búsqueda",
-  "resources": [
-    {
-      "id": "search",
-      "name": "Search Resource",
-      "description": "Consulta texto libre contra el backend",
-      "type": "query"
-    }
-  ],
+  "description": "MCP Server que expone la herramienta 'search-tool' para búsquedas libres en el backend.",
   "tools": [
     {
-      "id": "search-tool",
-      "name": "Search Tool",
-      "description": "Ejecuta búsquedas en el backend",
-      "inputSchema": {
+      "name": "search-tool",
+      "description": "Ejecuta una búsqueda en el backend a partir de un texto libre.",
+      "parameters": {
         "type": "object",
         "properties": {
-          "search": { "type": "string" }
+          "search": {
+            "type": "string",
+            "description": "Texto a buscar en el backend"
+          }
         },
         "required": ["search"]
       }
     }
-  ]
+  ],
+  "server": {
+    "url": "https://testdirip.onrender.com"
 }
