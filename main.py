@@ -1,28 +1,15 @@
-from fastapi import FastAPI, Request
-from fastmcp import FastMCP
+# main.py — HTTP fallback (recomendado)
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
-import requests
-import logging
-import os
+import httpx, logging, os
 
-# Configurar logs
 logging.basicConfig(level=logging.INFO)
-
-# Cargar variables de entorno
 load_dotenv()
 
-# Crear app y MCP server
-app = FastAPI()
-mcp = FastMCP(name="search-mcp-server", version="1.0.0")
+app = FastAPI(title="Search MCP (HTTP fallback)")
 
-# ✅ Registrar FastMCP en FastAPI
-@app.get("/mcp.json")
-async def get_manifest():
-    return mcp.manifest()
-
-# Variables del backend
 BACKEND_URL = os.getenv("BACKEND_URL")
 HEADERS = {
     "X-IBM-Client-Id": os.getenv("CLIENT_ID"),
@@ -30,59 +17,34 @@ HEADERS = {
     "X-Request-Channel": os.getenv("CHANNEL"),
     "X-Request-UserExecute": os.getenv("USER_EXECUTE"),
     "cache-control": "no-cache",
-    "ngrok-skip-browser-warning": "true"
 }
 
-# Modelo del request
-class SearchPayload(BaseModel):
+class InvokePayload(BaseModel):
     search: str
 
+@app.get("/mcp.json")
+async def manifest():
+    # Si existe manifest.json en la raíz, lo sirve; si no, devuelve inline (fallback)
+    manifest_path = "manifest.json"
+    if os.path.exists(manifest_path):
+        return FileResponse(manifest_path, media_type="application/json")
 
-# 🔹 Endpoint REST tradicional
-@app.post("/api/messages")
-async def handle_message(payload: SearchPayload, request: Request):
-    headers = dict(request.headers)
-    logging.info(f"📨 Payload recibido: {payload}")
-    logging.info(f"🧾 Headers recibidos: {headers}")
-
+@app.post("/invoke/search-tool")
+async def invoke_search(payload: InvokePayload):
     params = {"searchType": "F", "informationSearch": payload.search}
-
+    logging.info("Invocación search-tool payload=%s", payload.search)
     try:
-        logging.info(f"🔁 Llamando backend {BACKEND_URL}")
-        response = requests.get(BACKEND_URL, headers=HEADERS, params=params)
-        return JSONResponse(content=response.json())
+        async with httpx.AsyncClient(headers=HEADERS, timeout=30.0) as client:
+            r = await client.get(BACKEND_URL, params=params)
+            r.raise_for_status()
+            return JSONResponse(content=r.json())
+    except httpx.HTTPError as e:
+        logging.error("HTTP error: %s", e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
     except Exception as e:
-        logging.error(f"❌ Error en backend: {e}")
-        return {"error": str(e)}
-
-
-# 🔹 Recurso MCP
-@mcp.resource("https://testdirip.onrender.com/search")
-async def search_resource():
-    return {
-        "id": "search",
-        "name": "Search Resource",
-        "description": "Consulta texto libre contra el backend",
-        "type": "query"
-    }
-
-
-
-
-# 🔹 Herramienta MCP
-@mcp.tool("search-tool")
-async def search_tool(search: str):
-    """Ejecuta búsquedas en el backend"""
-    params = {"searchType": "F", "informationSearch": search}
-    try:
-        logging.info(f"🔍 Ejecutando MCP search con término: {search}")
-        response = requests.get(BACKEND_URL, headers=HEADERS, params=params)
-        return response.json()
-    except Exception as e:
-        logging.error(f"❌ Error MCP backend: {e}")
-        return {"error": str(e)}
-
+        logging.error("Error general: %s", e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
