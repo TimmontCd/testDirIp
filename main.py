@@ -15,7 +15,8 @@ load_dotenv()
 
 # Crear app y servidor MCP
 app = FastAPI()
-mcp = FastMCP(app, name="search-mcp-server", version="1.0.0")
+mcp = FastMCP()  # ✅ Ya no se pasan parámetros aquí
+mcp.register_to_fastapi(app)  # ✅ Se conecta con FastAPI
 
 # Variables del backend
 BACKEND_URL = os.getenv("BACKEND_URL")
@@ -82,8 +83,13 @@ async def search_tool(search: str):
         return {"error": str(e)}
 
 
+# Información del servidor MCP (nuevo método)
+mcp.set_metadata(
+    name="search-mcp-server",
+    version="1.0.0",
+    description="Servidor MCP que conecta con el backend de búsqueda"
+)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
