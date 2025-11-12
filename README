@@ -1,0 +1,14 @@
+# MCP Server - Search
+
+## Correr local
+1. python -m venv .venv && source .venv/bin/activate
+2. pip install -r requirements.txt
+3. cp .env.example .env (o edita .env con tus valores)
+4. uvicorn app:app --reload
+
+## Endpoints MCP
+- POST /resources/list
+- POST /resources/query
+- POST /tools/list
+- POST /tools/call
+- GET  /health
