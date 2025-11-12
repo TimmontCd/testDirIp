@@ -13,10 +13,12 @@ logging.basicConfig(level=logging.INFO)
 # Cargar variables de entorno
 load_dotenv()
 
-# Crear app y servidor MCP
+# Crear app y MCP server
 app = FastAPI()
-mcp = FastMCP()  # ✅ Ya no se pasan parámetros aquí
-mcp.register_to_fastapi(app)  # ✅ Se conecta con FastAPI
+mcp = FastMCP(name="search-mcp-server", version="1.0.0")
+
+# ✅ Registrar FastMCP en FastAPI
+mcp.register_to_fastapi(app)
 
 # Variables del backend
 BACKEND_URL = os.getenv("BACKEND_URL")
@@ -34,17 +36,14 @@ class SearchPayload(BaseModel):
     search: str
 
 
-# 🔹 Endpoint REST tradicional (mantienes compatibilidad con tus integraciones actuales)
+# 🔹 Endpoint REST tradicional
 @app.post("/api/messages")
 async def handle_message(payload: SearchPayload, request: Request):
     headers = dict(request.headers)
     logging.info(f"📨 Payload recibido: {payload}")
     logging.info(f"🧾 Headers recibidos: {headers}")
 
-    params = {
-        "searchType": "F",
-        "informationSearch": payload.search
-    }
+    params = {"searchType": "F", "informationSearch": payload.search}
 
     try:
         logging.info(f"🔁 Llamando backend {BACKEND_URL}")
@@ -66,14 +65,11 @@ async def search_resource():
     }
 
 
-# 🔹 Herramienta MCP — sin input_schema (FastMCP 0.4.1 lo detecta automáticamente)
+# 🔹 Herramienta MCP
 @mcp.tool("search-tool")
 async def search_tool(search: str):
     """Ejecuta búsquedas en el backend"""
-    params = {
-        "searchType": "F",
-        "informationSearch": search
-    }
+    params = {"searchType": "F", "informationSearch": search}
     try:
         logging.info(f"🔍 Ejecutando MCP search con término: {search}")
         response = requests.get(BACKEND_URL, headers=HEADERS, params=params)
@@ -83,13 +79,6 @@ async def search_tool(search: str):
         return {"error": str(e)}
 
 
-# Información del servidor MCP (nuevo método)
-mcp.set_metadata(
-    name="search-mcp-server",
-    version="1.0.0",
-    description="Servidor MCP que conecta con el backend de búsqueda"
-)
-
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=10000)
