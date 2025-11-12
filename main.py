@@ -2,6 +2,8 @@ import os
 import logging
 import httpx
 from dotenv import load_dotenv
+from fastapi import FastAPI
+import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 # Configuración inicial
@@ -9,6 +11,7 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
 # Inicialización del servidor MCP
+app = FastAPI()
 mcp = FastMCP("search-tool-server")
 
 # Variables de entorno y configuración del backend
@@ -42,7 +45,12 @@ async def search_tool(search: str) -> dict:
         logging.error(f"❌ Error MCP backend: {e}")
         return {"error": f"Error al consultar el backend: {e}"}
 
-# Punto de entrada principal
-if __name__ == "__main__":
-    mcp.run();
+# Endpoint raíz para verificar que el servicio está vivo
+@app.get("/")
+def root():
+    return {"status": "ok", "server": "search-tool-server"}
 
+# Punto de entrada principal para Render
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
