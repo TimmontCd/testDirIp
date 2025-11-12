@@ -57,7 +57,7 @@ async def handle_message(payload: SearchPayload, request: Request):
 
 
 # 🔹 Recurso MCP
-@mcp.resource("search")
+@mcp.resource("https://testdirip.onrender.com/search")
 async def search_resource():
     return {
         "id": "search",
@@ -65,6 +65,8 @@ async def search_resource():
         "description": "Consulta texto libre contra el backend",
         "type": "query"
     }
+
+
 
 
 # 🔹 Herramienta MCP
