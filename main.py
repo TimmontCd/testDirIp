@@ -85,19 +85,50 @@ async def tools_list():
 
 # --- MCP: ejecución de herramienta ---
 @app.post("/tools/call")
-async def tools_call(payload: dict, request: Request):
+async def tools_call(payload: dict):
     tool_id = payload.get("toolId")
     args = payload.get("arguments", {})
+    request_id = payload.get("id", "1")
 
     if tool_id != "search-tool":
-        return JSONResponse(status_code=404, content={"error": "Tool not found"})
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {
+                "code": -32601,
+                "message": "Tool not found"
+            }
+        })
 
     search = args.get("search")
     if not search:
-        return JSONResponse(status_code=400, content={"error": "Missing 'search' argument"})
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {
+                "code": -32602,
+                "message": "Missing 'search' argument"
+            }
+        })
 
-    params = {"searchType": "F", "informationSearch": search}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
+    try:
+        params = {"searchType": "F", "informationSearch": search}
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params)
+            data = resp.json()
 
-    return JSONResponse(content=resp.json(), headers={"ngrok-skip-browser-warning": "true"})
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": data  # Aquí se envuelve tu respuesta original
+        })
+
+    except Exception as e:
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "error": {
+                "code": -32603,
+                "message": f"Internal error: {str(e)}"
+            }
+        })
