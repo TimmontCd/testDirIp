@@ -32,6 +32,13 @@ BASE_HEADERS = {
 class SearchInput(BaseModel):
     search: str
 
+from fastapi.responses import FileResponse
+
+@app.get("/mcp.json")
+async def get_manifest():
+    return FileResponse("mcp.json", media_type="application/json")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
