@@ -44,5 +44,5 @@ async def search_tool(search: str) -> dict:
 
 # Punto de entrada principal
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 3000))  # Render asigna PORT
-    mcp.run(host="0.0.0.0", port=port)
+    mcp.run();
+
