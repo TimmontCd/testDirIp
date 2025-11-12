@@ -1,15 +1,17 @@
-# main.py — HTTP fallback (recomendado)
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+import os
+import logging
+import httpx
 from dotenv import load_dotenv
-import httpx, logging, os
+from mcp.server.fastmcp import FastMCP
 
+# Configuración inicial
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
-app = FastAPI(title="Search MCP (HTTP fallback)")
+# Inicialización del servidor MCP
+mcp = FastMCP("search-tool-server")
 
+# Variables de entorno y configuración del backend
 BACKEND_URL = os.getenv("BACKEND_URL")
 HEADERS = {
     "X-IBM-Client-Id": os.getenv("CLIENT_ID"),
@@ -17,35 +19,30 @@ HEADERS = {
     "X-Request-Channel": os.getenv("CHANNEL"),
     "X-Request-UserExecute": os.getenv("USER_EXECUTE"),
     "cache-control": "no-cache",
+    "ngrok-skip-browser-warning": "true"
 }
 
-class InvokePayload(BaseModel):
-    search: str
+# Herramienta MCP: búsqueda de clientes
+@mcp.tool()
+async def search_tool(search: str) -> dict:
+    """
+    Herramienta MCP que ejecuta búsquedas de texto libre contra el backend.
+    """
+    params = {"searchType": "F", "informationSearch": search}
 
-@app.get("/mcp.json")
-async def manifest():
-    # Si existe manifest.json en la raíz, lo sirve; si no, devuelve inline (fallback)
-    manifest_path = "mcp.json"
-    if os.path.exists(manifest_path):
-        return FileResponse(manifest_path, media_type="application/json")
-
-@app.post("/invoke/search-tool")
-async def invoke_search(payload: InvokePayload):
-    params = {"searchType": "F", "informationSearch": payload.search}
-    logging.info("Invocación search-tool payload=%s", payload.search)
     try:
+        logging.info(f"🔍 Ejecutando MCP search con término: {search}")
+
         async with httpx.AsyncClient(headers=HEADERS, timeout=30.0) as client:
-            r = await client.get(BACKEND_URL, params=params)
-            r.raise_for_status()
-            return JSONResponse(content=r.json())
-    except httpx.HTTPError as e:
-        logging.error("HTTP error: %s", e)
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-    except Exception as e:
-        logging.error("Error general: %s", e)
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+            response = await client.get(BACKEND_URL, params=params)
+            response.raise_for_status()
+            return response.json()
 
+    except httpx.RequestError as e:
+        logging.error(f"❌ Error MCP backend: {e}")
+        return {"error": f"Error al consultar el backend: {e}"}
+
+# Punto de entrada principal
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
-
+    port = int(os.getenv("PORT", 3000))  # Render asigna PORT
+    mcp.run(host="0.0.0.0", port=port)
