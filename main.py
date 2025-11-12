@@ -1,15 +1,12 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from dotenv import load_dotenv
 import os
-import logging
 import httpx
+import logging
+from dotenv import load_dotenv
+from fastmcp import FastMCP, MCPTool, MCPResource
 
+# Configuración de logging y variables de entorno
 logging.basicConfig(level=logging.INFO)
 load_dotenv()
-
-app = FastAPI(title="MCP Server - Search")
 
 BACKEND_URL = os.getenv("BACKEND_URL")
 CLIENT_ID = os.getenv("CLIENT_ID")
@@ -18,7 +15,7 @@ CHANNEL = os.getenv("CHANNEL")
 USER_EXECUTE = os.getenv("USER_EXECUTE")
 
 if not BACKEND_URL:
-    raise RuntimeError("BACKEND_URL no está configurado en .env")
+    raise RuntimeError("❌ BACKEND_URL no está configurado en .env")
 
 BASE_HEADERS = {
     "X-IBM-Client-Id": CLIENT_ID or "",
@@ -29,106 +26,59 @@ BASE_HEADERS = {
     "ngrok-skip-browser-warning": "true"
 }
 
-class SearchInput(BaseModel):
-    search: str
+# Inicializa servidor MCP
+app = FastMCP(
+    name="search-mcp-server",
+    version="1.0.0",
+    description="Servidor MCP que expone recursos y herramientas de búsqueda"
+)
 
-from fastapi.responses import FileResponse
+# --- RESOURCE: search ---
+@app.resource("search")
+class SearchResource(MCPResource):
+    """Consulta de información en backend por texto"""
 
-@app.get("/mcp.json")
-async def get_manifest():
-    return FileResponse("mcp.json", media_type="application/json")
+    async def on_query(self, query: str):
+        params = {"searchType": "F", "informationSearch": query}
+        logging.info(f"🔍 Realizando búsqueda para: {query}")
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
+            return resp.json()
 
 
-@app.get("/health")
+# --- TOOL: search-tool ---
+@app.tool("search-tool")
+class SearchTool(MCPTool):
+    """Ejecuta búsquedas en el backend"""
+
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "search": {"type": "string"}
+        },
+        "required": ["search"]
+    }
+
+    async def handler(self, search: str):
+        params = {"searchType": "F", "informationSearch": search}
+        logging.info(f"🧰 Ejecutando herramienta MCP con parámetro: {search}")
+
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
+            data = resp.json()
+
+        return {
+            "results": data,
+            "count": len(data) if isinstance(data, list) else 1
+        }
+
+
+# --- Health check (opcional) ---
+@app.health_check
 async def health():
     return {"status": "ok"}
 
-# --- MCP: lista de recursos ---
-@app.post("/resources/list")
-async def resources_list():
-    return {
-        "resources": [
-            {
-                "id": "search",
-                "name": "Search Resource",
-                "description": "Consulta de información en backend por texto",
-                "type": "query"
-            }
-        ]
-    }
 
-# --- MCP: consulta de recurso ---
-@app.post("/resources/query")
-async def resources_query(payload: SearchInput):
-    params = {"searchType": "F", "informationSearch": payload.search}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params, timeout=30.0)
-    return JSONResponse(content=resp.json(), headers={"ngrok-skip-browser-warning": "true"})
-
-# --- MCP: lista de herramientas ---
-@app.post("/tools/list")
-async def tools_list():
-    return {
-        "tools": [
-            {
-                "id": "search-tool",
-                "name": "Search Tool",
-                "description": "Ejecuta búsquedas en el backend",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {"search": {"type": "string"}},
-                    "required": ["search"]
-                }
-            }
-        ]
-    }
-
-# --- MCP: ejecución de herramienta ---
-@app.post("/tools/call")
-async def tools_call(payload: dict):
-    tool_id = payload.get("toolId")
-    args = payload.get("arguments", {})
-    request_id = payload.get("id", "1")
-
-    if tool_id != "search-tool":
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "error": {
-                "code": -32601,
-                "message": "Tool not found"
-            }
-        })
-
-    search = args.get("search")
-    if not search:
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "error": {
-                "code": -32602,
-                "message": "Missing 'search' argument"
-            }
-        })
-
-    try:
-        params = {"searchType": "F", "informationSearch": search}
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(BACKEND_URL, headers=BASE_HEADERS, params=params)
-            data = resp.json()
-
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": data  # Aquí se envuelve tu respuesta original
-        })
-
-    except Exception as e:
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "error": {
-                "code": -32603,
-                "message": f"Internal error: {str(e)}"
-            }
-        })
+# --- Inicia el servidor MCP ---
+if __name__ == "__main__":
+    app.run(port=3000)
